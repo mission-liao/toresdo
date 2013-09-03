@@ -8,8 +8,11 @@ Created on Aug 8, 2013
 import unittest
 
 TEST_MODULES = [
-    'toresdo.test.db.field',
+    'toresdo.test.om.basic',
+    'toresdo.test.om.mongo.motor',
+    'toresdo.test.om.sql.sqlite'
 ]
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromNames(TEST_MODULES)
