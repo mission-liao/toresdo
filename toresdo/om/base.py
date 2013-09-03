@@ -9,6 +9,11 @@ from collections import Iterator
 
 class Cond(object):
     """
+    represent a condition used in querying database, like where-clause
+    used in SQL.
+    """
+    
+    """
     condition operator for value
     """
     _comp_base_ = 0
@@ -39,19 +44,25 @@ class Cond(object):
         self._operand = args
 
         if op >= Cond._bool_base_:
-            for o in self._operand:
-                if type(o) != Cond:
-                    raise TypeError("and/or non-Cond object.")
+            n = [o for o in self._operand if type(o) != Cond]
+            if len(n) != 0:
+                raise TypeError("and/or non-Cond object.")
 
     @staticmethod
     def group(op, *args):
+        """
+        group a set of conditions with
+        a boolean operator, like 'and' or 'or'.
+        """
         if op > Cond._bool_base_:
             return Cond(op, *args)
         else:
             return None
 
-
-    class Act(object):
+    class _Act(object):
+        """
+        enum for actions used in Cond.to_cmd
+        """
         _in = 0
         _out = 1
         _cond = 3
@@ -59,9 +70,13 @@ class Cond(object):
 
     @staticmethod
     def to_cmd(model, cond):
+        """
+        convert a condition to a comand that
+        can be used in querying database
+        """
         stmt = None
         depth = 0
-        to_handle = [(Cond.Act._cond, cond)]
+        to_handle = [(Cond._Act._cond, cond)]
         """
         traverse condition-tree, and
         call corresponding hooking functions
@@ -70,24 +85,24 @@ class Cond(object):
         while len(to_handle) > 0:
             rec = to_handle.pop()
 
-            if rec[0] == Cond.Act._in:
+            if rec[0] == Cond._Act._in:
                 stmt = model._enter_depth(depth, stmt)
                 depth = depth + 1
-            elif rec[0] == Cond.Act._out:
+            elif rec[0] == Cond._Act._out:
                 stmt = model._leave_depth(depth, stmt)
                 depth = depth - 1
-            elif rec[0] == Cond.Act._cond:
+            elif rec[0] == Cond._Act._cond:
                 c = rec[1]
                 if c._op > Cond._bool_base_:
-                    to_handle.append((Cond.Act._out, ))
-                    to_handle.append((Cond.Act._cond, c._operand[-1]))
+                    to_handle.append((Cond._Act._out, ))
+                    to_handle.append((Cond._Act._cond, c._operand[-1]))
                     for v in reversed(c._operand[:-1]):
-                        to_handle.append((Cond.Act._bool, c._op))
-                        to_handle.append((Cond.Act._cond, v))
-                    to_handle.append((Cond.Act._in, ))
+                        to_handle.append((Cond._Act._bool, c._op))
+                        to_handle.append((Cond._Act._cond, v))
+                    to_handle.append((Cond._Act._in, ))
                 else:
                     stmt = model._handle_cond(c._op, c._operand[0], c._operand[1], depth, stmt)
-            elif rec[0] == Cond.Act._bool:
+            elif rec[0] == Cond._Act._bool:
                 stmt = model._handle_bool_op(rec[1], depth, stmt)
 
         model._finish_cond(stmt)
@@ -95,6 +110,10 @@ class Cond(object):
 
  
 class field(object):
+    """
+    this class represent a database field,
+    used as a decorator in python.
+    """
     def __init__(self, pk=False, enable_type_check=True):
         # TODO: handle primary-key
         self._pk = pk
@@ -104,6 +123,10 @@ class field(object):
         self._valid = None
 
     def __call__(self, fn):
+        """
+        this function accepts another function(that what decorator means to be)
+        and receive type/default-value from that function.
+        """
         # get name of this field 
         self._name = fn.__name__
         # get type of this field
@@ -121,11 +144,23 @@ class field(object):
 
     def __get__(self, obj, obj_type):
         if obj == None:
+            """
+            when accessed by class but not instance,
+            return this field
+            """
             return self
 
+        """
+        call the hook(_get_field) provided by each model to get 
+        the actual value
+        """
         return obj._get_field(self._name)
     
     def _check_type(self, obj, v):
+        """
+        private function wrapping actions required to
+        check input value from caller
+        """
         if self._type_chk and type(v) != self._type:
             raise Exception("Type Error.")
         if self._valid:
@@ -135,6 +170,10 @@ class field(object):
 
     def __set__(self, obj, v):
         if obj:
+            """
+            call the hook(_set_field) provided by each model to set
+            the value
+            """
             obj._set_field(self._name, self._check_type(obj, v))
         else:
             # TODO: add test case
@@ -144,9 +183,18 @@ class field(object):
             self._default = self._check_type(None, v)
 
     def validator(self, fn):
+        """
+        add a new validator for this field
+        """
+        # TODO: replace _valid from a pointer to a list
         self._valid = fn
         return self
+
+    """
+    comparison operators
     
+    These operators would generate Cond object for later usage.
+    """ 
     def __lt__(self, v):
         return Cond(Cond.lt, self, self._check_type(None, v))
 

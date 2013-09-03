@@ -13,10 +13,22 @@ from toresdo.om import Cond
 
 
 class Model(ModelBase):
+    """
+    Model for Sqlite
+    """
 
     def __init__(self):
         super(Model, self).__init__()
+
+        """
+        Internally, real data is stored in a list, which is useful
+        when the 'WHERE' clause is used in qmark way.
         
+            SELECT * FROM User WHERE a=? and b=?
+        
+        We need to pass values as a iterable(list, tuple), and that's
+        how we store the data.
+        """        
         self._local_val = list(self.__class__._field_default)
 
     @classmethod
