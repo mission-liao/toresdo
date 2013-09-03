@@ -40,3 +40,6 @@ class TestDB_sqlite(unittest.TestCase):
         self.assertEqual(stmt[1], ["Tom", 19, 1])
         
         # boolean operator with more than 2 conditions
+        stmt = Cond.to_cmd(User, Cond.group(Cond.or__, User.name == "Tom", User.name == "Mary", User.name == "Gibby"))
+        self.assertEqual(stmt[0], "SELECT * FROM User WHERE (name=? OR name=? OR name=?)")
+        self.assertEqual(stmt[1], ["Tom", "Mary", "Gibby"])

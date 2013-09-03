@@ -29,7 +29,7 @@ class TestModel(ModelBase):
         if hasattr(self, "_local_model"):
             return self._local_model[name]
         return self.__class__._model[name]
- 
+
 
 class Test(TestModel):
     
@@ -49,7 +49,6 @@ class Test(TestModel):
         if len(v) > self._max_name:
             # meaningless error, just for test
             raise RuntimeError("")
-        return v
 
     @field()
     def age(self):
@@ -59,11 +58,10 @@ class Test(TestModel):
     def age(self, v):
         if v > self._max_age:
             raise ValueError("")
-        return v
 
 class TestDB(unittest.TestCase):
 
-    def test_basic_field(self):
+    def test_field_basic(self):
         """
         basic usage of fields
         """
@@ -86,6 +84,29 @@ class TestDB(unittest.TestCase):
             m1.age = 100
         with self.assertRaises(RuntimeError):
             m1.name="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-    def test_op_save(self):
-        pass
+            
+    def test_field_multiple_validator(self):
+        """
+        make sure multiple validator works
+        """
+        class User(TestModel):
+            @field()
+            def name(self):
+                return ""
+            
+            @name.validator
+            def name(self, v):
+                if len(v) < 5:
+                    raise ValueError()
+                
+                return v
+            @name.validator
+            def name(self, v):
+                if len(v) > 10:
+                    raise ValueError()
+                
+        with self.assertRaises(ValueError):
+            User().name = "Tom"
+            
+        with self.assertRaises(ValueError):
+            User().name = "TomTomTomTom"

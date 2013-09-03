@@ -120,7 +120,7 @@ class field(object):
         # TODO: add test case for type-filter
         self._type_chk = enable_type_check
 
-        self._valid = None
+        self._valid = []
 
     def __call__(self, fn):
         """
@@ -163,31 +163,25 @@ class field(object):
         """
         if self._type_chk and type(v) != self._type:
             raise Exception("Type Error.")
-        if self._valid:
-            v = self._valid(obj, v)
+
+        # loop through all validators
+        for f in self._valid:
+            f(obj, v)
 
         return v
 
     def __set__(self, obj, v):
-        if obj:
-            """
-            call the hook(_set_field) provided by each model to set
-            the value
-            """
-            obj._set_field(self._name, self._check_type(obj, v))
-        else:
-            # TODO: add test case
-            """
-            change the default value of this field
-            """
-            self._default = self._check_type(None, v)
+        """
+        call the hook(_set_field) provided by each model to set
+        the value
+        """
+        obj._set_field(self._name, self._check_type(obj, v))
 
     def validator(self, fn):
         """
         add a new validator for this field
         """
-        # TODO: replace _valid from a pointer to a list
-        self._valid = fn
+        self._valid.append(fn)
         return self
 
     """
