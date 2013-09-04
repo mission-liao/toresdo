@@ -16,6 +16,8 @@ class Model(ModelBase):
     """
     Model for Sqlite
     """
+    
+    __table_name__ = "test.db"
 
     def __init__(self):
         super(Model, self).__init__()
@@ -28,13 +30,20 @@ class Model(ModelBase):
         
         We need to pass values as a iterable(list, tuple), and that's
         how we store the data.
+        
+        This Sqlite model is just implemented for testing, that's why
+        we always connect to 'test.db' and didn't provide a way to connect
+        anywhere else.
         """        
         self._local_val = list(self.__class__._field_default)
 
     @classmethod
     def _prepare(klass, fields):
-        # prepare object mapping related
+        # init all required variables
+        klass._sql_cmd = {}
         klass._field_idx = {}
+
+        # prepare object mapping related
         field_default = []
         idx = 0
         for k,v in fields.items():
@@ -58,17 +67,19 @@ class Model(ModelBase):
             elif v._type is str:
                 cmd += " TEXT"
         cmd += ")"
-        klass._sql_cmd.create_table
+        klass._sql_cmd["create_table"] = cmd
         
         # prepare insert command
         cmd = "INSERT INTO " + klass.__name__ + " VALUES ("
-        cmd += "? " * len(fields)
+        cmd += "?, " * (len(fields) - 1)    # the last qmark need special handle
+        cmd += "?"
         cmd += ")"
+        klass._sql_cmd["insert"] = cmd
 
         # create table if not exist
-        conn = sqlite3.connect(":memory:")
+        conn = sqlite3.connect(klass.__table_name__)
         with conn:
-            conn.execute(klass._sql_cmd.create_table)
+            conn.execute(klass._sql_cmd["create_table"])
         conn.close()
 
     @classmethod
@@ -80,6 +91,9 @@ class Model(ModelBase):
         elif has_idx or has_default:
             raise Exception("Failed to init SQLite Mapping")
         return False
+    
+    def _attach_model(self, model):
+        self._local_val = model
 
     def _set_field(self, name, v):
         self._local_val[self.__class__._field_idx[name]] = v
@@ -87,10 +101,10 @@ class Model(ModelBase):
     def _get_field(self, name):
         return self._local_val[self.__class__._field_idx[name]]
 
-    def save(self, callback):
-        conn = sqlite3.connect(":memory:")
+    def save(self, callback=None):
+        conn = sqlite3.connect(self.__class__.__table_name__)
         with conn:
-            conn.execute(self.__class__._sql_cmd.insert, self._local_val)
+            conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
         conn.close()
         
     @classmethod
@@ -135,10 +149,26 @@ class Model(ModelBase):
 
         stmt[0] += "?"
         stmt[1].append(v2)
-        
+
         return stmt
 
     @classmethod 
     def _finish_cond(klass, stmt):
         stmt[0] = "SELECT * FROM " + klass.__name__ + " WHERE " + stmt[0]
         return stmt
+    
+    @classmethod
+    def _pre_loop(klass, stmt):
+        conn = sqlite3.connect(klass.__table_name__)
+        curs = conn.cursor()
+        curs.execute(stmt[0], stmt[1])
+        
+        return [conn, curs]
+    
+    @classmethod
+    def _next_elm(klass, ctx):
+        return ctx[1].fetchone()
+    
+    @classmethod
+    def _post_loop(klass, ctx):
+        ctx[0].close()

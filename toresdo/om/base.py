@@ -86,12 +86,15 @@ class Cond(object):
             rec = to_handle.pop()
 
             if rec[0] == Cond._Act._in:
+                # enter a condition group
                 stmt = model._enter_depth(depth, stmt)
                 depth = depth + 1
             elif rec[0] == Cond._Act._out:
+                # leave a condition group
                 stmt = model._leave_depth(depth, stmt)
                 depth = depth - 1
             elif rec[0] == Cond._Act._cond:
+                # handle a Cond
                 c = rec[1]
                 if c._op > Cond._bool_base_:
                     to_handle.append((Cond._Act._out, ))
@@ -103,6 +106,7 @@ class Cond(object):
                 else:
                     stmt = model._handle_cond(c._op, c._operand[0], c._operand[1], depth, stmt)
             elif rec[0] == Cond._Act._bool:
+                # handle a boolean operator
                 stmt = model._handle_bool_op(rec[1], depth, stmt)
 
         model._finish_cond(stmt)
@@ -134,7 +138,6 @@ class field(object):
         if type(ret) is type:
             # user pass a class, means no default value
             self._type = ret
-            # TODO: test case for _default
             self._default = None
         else:
             self._type = type(ret)
@@ -214,9 +217,32 @@ class QSet(Iterator):
         self._cond = cond
         self._cb = cb
 
+        self._ctx = None
+
     def __next__(self):
-        # TODO: not finished yet.
-        pass
+        if not self._ctx:
+            self._ctx = self._klass._pre_loop(Cond.to_cmd(self._klass, self._cond))
+            if not self._ctx:
+                raise Exception("loop initialization failed.")
+
+        try:
+            res = self._klass._next_elm(self._ctx)
+            if not res:
+                """
+                some db-driver would only return nothing but not raise
+                StopIteration exception. We unify looping behavior here.
+                """
+                raise StopIteration
+
+        except StopIteration as e:
+            self._klass._post_loop()
+            raise e
+
+        # wrapped raw data with model
+        m = self._klass()
+        m._attach_model(res)
+
+        return m
 
 
 class ModelBase(object):
@@ -226,6 +252,7 @@ class ModelBase(object):
     Each model should provide these callbacks listed below:
     - _is_prepared
     - _prepare
+    - _attach_model
     - _set_field
     - _get_field
     - _enter_depth
@@ -233,24 +260,29 @@ class ModelBase(object):
     - _handle_cond
     - _handle_bool_op
     - _finish_cond
+    - _pre_loop
+    - _next_elm
+    - _post_loop
     """
     def __init__(self):
         if not self.__class__._is_prepared():
-            """
-            generate a dict of field
-            """
+            # generate a dict of field
             fields = {}
             for k,v in self.__class__.__dict__.items():
                 if issubclass(type(v), field):
                     fields.update({k: v})
 
-            # allow to update fields
+            # pass field list to model-implementation
             self.__class__._prepare(fields)
+
+            if not self.__class__._is_prepared():
+                # Error check, make sure model is correctly initialized
+                raise Exception("Not initialized.")
 
     @classmethod
     def find(klass, cond=None, cb=None):
-        return QSet(klass, Cond.to_cmd(klass, cond), cb)
+        return QSet(klass, cond, cb)
 
     @classmethod
     def find_one(klass, cond=None, cb=None):
-        return next(QSet(klass, Cond.to_cmd(klass, cond), cb), None)
+        return next(klass.find(cond, cb))
