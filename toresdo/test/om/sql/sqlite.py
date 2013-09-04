@@ -94,6 +94,9 @@ class TestDB_sqlite(unittest.TestCase):
                 b_tom = True
             elif uu.name == "Mary":
                 b_mary = True
+                self.assertEqual(uu.age, 19)
+                self.assertEqual(uu.relation, 0)
+                self.assertEqual(uu.email, "")
     
         self.assertTrue(b_tom)
         self.assertTrue(b_mary)

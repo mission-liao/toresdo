@@ -71,10 +71,10 @@ class Cond(object):
     @staticmethod
     def to_cmd(model, cond):
         """
-        convert a condition to a comand that
+        convert a condition to a command that
         can be used in querying database
         """
-        stmt = None
+        ctx = model._prepare_cond_ctx()
         depth = 0
         to_handle = [(Cond._Act._cond, cond)]
         """
@@ -87,11 +87,11 @@ class Cond(object):
 
             if rec[0] == Cond._Act._in:
                 # enter a condition group
-                stmt = model._enter_depth(depth, stmt)
+                ctx = model._enter_group(depth, ctx)
                 depth = depth + 1
             elif rec[0] == Cond._Act._out:
                 # leave a condition group
-                stmt = model._leave_depth(depth, stmt)
+                ctx = model._leave_group(depth, ctx)
                 depth = depth - 1
             elif rec[0] == Cond._Act._cond:
                 # handle a Cond
@@ -104,13 +104,13 @@ class Cond(object):
                         to_handle.append((Cond._Act._cond, v))
                     to_handle.append((Cond._Act._in, ))
                 else:
-                    stmt = model._handle_cond(c._op, c._operand[0], c._operand[1], depth, stmt)
+                    ctx = model._handle_cond(c._op, c._operand[0], c._operand[1], depth, ctx)
             elif rec[0] == Cond._Act._bool:
                 # handle a boolean operator
-                stmt = model._handle_bool_op(rec[1], depth, stmt)
+                ctx = model._handle_group(rec[1], depth, ctx)
 
-        model._finish_cond(stmt)
-        return stmt
+        ctx = model._finish_cond(ctx)
+        return ctx
 
  
 class field(object):
@@ -251,17 +251,22 @@ class ModelBase(object):
     Base of Model.
     
     Each model should provide these callbacks listed below:
+    ========== init model base field
     - _is_cls_prepared
     - _prepare_cls
     - _prepare_obj
     - _attach_model
+    ========== field access
     - _set_field
     - _get_field
-    - _enter_depth
-    - _leave_depth
+    ========== compose query-statement
+    - _prepare_cond_ctx
+    - _enter_group
+    - _leave_group
     - _handle_cond
-    - _handle_bool_op
+    - _handle_group
     - _finish_cond
+    ========== loop query result
     - _pre_loop
     - _next_elm
     - _post_loop
@@ -293,6 +298,65 @@ class ModelBase(object):
     def _prepare_obj(self):
         pass
 
+    
+    """
+    Required Callbacks
+    """
+    @classmethod
+    def _is_cls_prepared(klass):
+        raise NotImplementedError()
+
+    @classmethod
+    def _prepare_cls(klass, fields):
+        raise NotImplementedError()
+
+    def _attach_model(self, model):
+        raise NotImplementedError()
+
+    def _set_field(self, name, v):
+        raise NotImplementedError()
+
+    def _get_field(self, name):
+        raise NotImplementedError()
+
+    @classmethod
+    def _prepare_cond_ctx(klass):
+        raise NotImplementedError()
+
+    @classmethod
+    def _enter_group(klass, depth, ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _leave_group(klass, depth, ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _handle_group(klass, op, depth, ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _handle_cond(klass, op, fld, v2, depth, ctx):
+        raise NotImplementedError()
+
+    @classmethod 
+    def _finish_cond(klass, ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _pre_loop(klass, cond_ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _next_elm(klass, loop_ctx):
+        raise NotImplementedError()
+
+    @classmethod
+    def _post_loop(klass, loop_ctx):
+        raise NotImplementedError() 
+
+    """
+    """
     @classmethod
     def find(klass, cond=None, cb=None):
         return QSet(klass, cond, cb)

@@ -104,20 +104,21 @@ class Model(ModelBase):
         with conn:
             conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
         conn.close()
-        
+
     @classmethod
-    def _enter_depth(klass, depth, stmt):
-        if stmt:
-            return [stmt[0] + "(", stmt[1]]
-        else:
-            return ["(", []]
-    
+    def _prepare_cond_ctx(klass):
+        return ["", []]
+
     @classmethod
-    def _leave_depth(klass, depth, stmt):
+    def _enter_group(klass, depth, stmt):
+        return [stmt[0] + "(", stmt[1]]
+
+    @classmethod
+    def _leave_group(klass, depth, stmt):
         return [stmt[0] + ")", stmt[1]]
     
     @classmethod
-    def _handle_bool_op(klass, op, depth, stmt):
+    def _handle_group(klass, op, depth, stmt):
         if op == Cond.and__:
             return [stmt[0] + " AND ", stmt[1]]
         elif op == Cond.or__:
@@ -127,9 +128,6 @@ class Model(ModelBase):
         
     @classmethod
     def _handle_cond(klass, op, fld, v2, depth, stmt):
-        if not stmt:
-            stmt = ["", []]
-
         stmt[0] += fld._name
 
         if op == Cond.lt:
