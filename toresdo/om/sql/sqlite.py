@@ -15,30 +15,28 @@ from toresdo.om import Cond
 class Model(ModelBase):
     """
     Model for Sqlite
+    
+    Internally, real data is stored in a list, which is useful
+    when the 'WHERE' clause is used in qmark way.
+       
+        SELECT * FROM User WHERE a=? and b=?
+        
+    We need to pass values as a iterable(list, tuple), and that's
+    how we store the data.
+        
+    This Sqlite model is just implemented for testing, that's why
+    we always connect to 'test.db' and didn't provide a way to connect
+    anywhere else.
+ 
     """
     
     __table_name__ = "test.db"
 
-    def __init__(self):
-        super(Model, self).__init__()
-
-        """
-        Internally, real data is stored in a list, which is useful
-        when the 'WHERE' clause is used in qmark way.
-        
-            SELECT * FROM User WHERE a=? and b=?
-        
-        We need to pass values as a iterable(list, tuple), and that's
-        how we store the data.
-        
-        This Sqlite model is just implemented for testing, that's why
-        we always connect to 'test.db' and didn't provide a way to connect
-        anywhere else.
-        """        
+    def _prepare_obj(self):
         self._local_val = list(self.__class__._field_default)
 
     @classmethod
-    def _prepare(klass, fields):
+    def _prepare_cls(klass, fields):
         # init all required variables
         klass._sql_cmd = {}
         klass._field_idx = {}
@@ -83,7 +81,7 @@ class Model(ModelBase):
         conn.close()
 
     @classmethod
-    def _is_prepared(klass):
+    def _is_cls_prepared(klass):
         has_idx = hasattr(klass, "_field_idx")
         has_default = hasattr(klass, "_field_default")
         if has_idx and has_default:

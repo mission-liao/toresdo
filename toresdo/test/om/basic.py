@@ -11,13 +11,13 @@ from toresdo.om import field
 class TestModel(ModelBase):
     
     @classmethod 
-    def _prepare(klass, fields):
+    def _prepare_cls(klass, fields):
         klass._model = {}
         for k, v in fields.items():
             klass._model.update({k: v._default})
             
     @classmethod
-    def _is_prepared(klass):
+    def _is_cls_prepared(klass):
         return hasattr(klass, "_model") and klass._model != None
 
     def _set_field(self, name, v):

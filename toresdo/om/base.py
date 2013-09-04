@@ -235,7 +235,8 @@ class QSet(Iterator):
                 raise StopIteration
 
         except StopIteration as e:
-            self._klass._post_loop()
+            self._klass._post_loop(self._ctx)
+            self._ctx = None
             raise e
 
         # wrapped raw data with model
@@ -250,8 +251,9 @@ class ModelBase(object):
     Base of Model.
     
     Each model should provide these callbacks listed below:
-    - _is_prepared
-    - _prepare
+    - _is_cls_prepared
+    - _prepare_cls
+    - _prepare_obj
     - _attach_model
     - _set_field
     - _get_field
@@ -264,8 +266,8 @@ class ModelBase(object):
     - _next_elm
     - _post_loop
     """
-    def __init__(self):
-        if not self.__class__._is_prepared():
+    def __init__(self, **kwargs):
+        if not self.__class__._is_cls_prepared():
             # generate a dict of field
             fields = {}
             for k,v in self.__class__.__dict__.items():
@@ -273,11 +275,23 @@ class ModelBase(object):
                     fields.update({k: v})
 
             # pass field list to model-implementation
-            self.__class__._prepare(fields)
+            self.__class__._prepare_cls(fields)
 
-            if not self.__class__._is_prepared():
+            if not self.__class__._is_cls_prepared():
                 # Error check, make sure model is correctly initialized
                 raise Exception("Not initialized.")
+
+        self._prepare_obj()
+
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
+                
+    """
+    Optional Callbacks
+    """
+    def _prepare_obj(self):
+        pass
 
     @classmethod
     def find(klass, cond=None, cb=None):

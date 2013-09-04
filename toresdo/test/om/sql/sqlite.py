@@ -27,6 +27,10 @@ class User(Model):
     @field()
     def relation(self):
         return int
+    
+    @field()
+    def address(self):
+        return str
 
 class TestDB_sqlite(unittest.TestCase):
     @classmethod
@@ -74,3 +78,28 @@ class TestDB_sqlite(unittest.TestCase):
         self.assertEqual(uu.email, "tom@hotmail.com")
         self.assertEqual(uu.age, 19)
         self.assertEqual(uu.relation, 1)
+
+    def test_select_more_than_one(self):
+        u = User()
+        u.name = "Mary"
+        u.age = 19
+        u.relation = 0
+        u.save()
+        
+        # query for both Tom and Mary
+        b_tom = False
+        b_mary = False
+        for uu in User.find(User.age < 20):
+            if uu.name == "Tom":
+                b_tom = True
+            elif uu.name == "Mary":
+                b_mary = True
+    
+        self.assertTrue(b_tom)
+        self.assertTrue(b_mary)
+        
+    def test_init_with_kwargs(self):
+        u = User(name="Tom", email="a@a.com", age=19)
+        self.assertEqual(u.name, "Tom")
+        self.assertEqual(u.email, "a@a.com")
+        self.assertEqual(u.age, 19)
