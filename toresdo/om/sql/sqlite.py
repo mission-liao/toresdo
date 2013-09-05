@@ -108,26 +108,32 @@ class Model(ModelBase):
     @classmethod
     def _prepare_cond_ctx(klass):
         return ["", []]
+    
+    @staticmethod 
+    def __handle_bool(idx, op, buf):
+        if idx > 0:
+            if op == Cond.and__:
+                buf += " AND "
+            elif op == Cond.or__:
+                buf += " OR "
+            else:
+                raise Exception("Unknown Case.")
+        return buf
 
     @classmethod
-    def _enter_group(klass, depth, stmt):
-        return [stmt[0] + "(", stmt[1]]
+    def _enter_group(klass, stmt, ctx):
+        stmt[0] = klass.__handle_bool(ctx[Cond.i_idx], ctx[Cond.i_p_op], stmt[0])
+        stmt[0] += "("
+        return stmt
 
     @classmethod
-    def _leave_group(klass, depth, stmt):
-        return [stmt[0] + ")", stmt[1]]
+    def _leave_group(klass, stmt, ctx):
+        stmt[0] += ")"
+        return stmt
     
     @classmethod
-    def _handle_group(klass, op, depth, stmt):
-        if op == Cond.and__:
-            return [stmt[0] + " AND ", stmt[1]]
-        elif op == Cond.or__:
-            return [stmt[0] + " OR ", stmt[1]]
-        else:
-            raise Exception("Unknown boolean operator {0}".format(op))
-        
-    @classmethod
-    def _handle_cond(klass, op, fld, v2, depth, stmt):
+    def _handle_cond(klass, op, fld, v2, stmt, ctx):
+        stmt[0] = klass.__handle_bool(ctx[Cond.i_idx], ctx[Cond.i_op], stmt[0])
         stmt[0] += fld._name
 
         if op == Cond.lt:
@@ -158,7 +164,7 @@ class Model(ModelBase):
         conn = sqlite3.connect(klass.__table_name__)
         curs = conn.cursor()
         curs.execute(stmt[0], stmt[1])
-        
+
         return [conn, curs]
     
     @classmethod

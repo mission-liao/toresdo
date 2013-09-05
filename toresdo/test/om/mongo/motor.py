@@ -9,7 +9,6 @@ import tornado.testing
 from toresdo.om.mongo.motor import Model
 from toresdo.om import field
 from toresdo.om import Cond
-from tornado import gen
 
 class User(Model):
     
@@ -69,10 +68,8 @@ class TestDB_motor(tornado.testing.AsyncTestCase):
         
     def test_query_stat(self):
         # A very basic one
-        """
         ctx = Cond.to_cmd(User, User.name == "Tom")
         self.assertEqual(ctx, {"name": "Tom"})
-        """
 
         # combine with several boolean operator
         ctx = Cond.to_cmd(User, Cond.group(Cond.or__, User.name != "Tom", User.name == "Mary", Cond.group(Cond.and__, User.age > 19, User.relation == 1, User.age < 5)))

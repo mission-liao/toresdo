@@ -66,7 +66,15 @@ class Cond(object):
         _in = 0
         _out = 1
         _cond = 3
-        _bool = 4
+
+    """
+    Index to context list
+    """
+    i_act = 0   # action item
+    i_cond = 1  # condition object
+    i_p_op = 2  # bool-op of parent group
+    i_op = 3    # op of current group
+    i_idx = 4   # index of current condition/group in parent group
 
     @staticmethod
     def to_cmd(model, cond):
@@ -74,9 +82,8 @@ class Cond(object):
         convert a condition to a command that
         can be used in querying database
         """
-        ctx = model._prepare_cond_ctx()
-        depth = 0
-        to_handle = [(Cond._Act._cond, cond)]
+        model_ctx = model._prepare_cond_ctx()
+        to_handle = [(Cond._Act._cond, cond, None, None, 0)]
         """
         traverse condition-tree, and
         call corresponding hooking functions
@@ -84,33 +91,29 @@ class Cond(object):
         """
         while len(to_handle) > 0:
             rec = to_handle.pop()
-
-            if rec[0] == Cond._Act._in:
+            if rec[Cond.i_act] == Cond._Act._in:
                 # enter a condition group
-                ctx = model._enter_group(depth, ctx)
-                depth = depth + 1
-            elif rec[0] == Cond._Act._out:
+                model_ctx = model._enter_group(model_ctx, rec)
+            elif rec[Cond.i_act] == Cond._Act._out:
                 # leave a condition group
-                ctx = model._leave_group(depth, ctx)
-                depth = depth - 1
-            elif rec[0] == Cond._Act._cond:
+                model_ctx = model._leave_group(model_ctx, rec)
+            elif rec[Cond.i_act] == Cond._Act._cond:
                 # handle a Cond
-                c = rec[1]
+                c = rec[Cond.i_cond]
                 if c._op > Cond._bool_base_:
-                    to_handle.append((Cond._Act._out, ))
-                    to_handle.append((Cond._Act._cond, c._operand[-1]))
-                    for v in reversed(c._operand[:-1]):
-                        to_handle.append((Cond._Act._bool, c._op))
-                        to_handle.append((Cond._Act._cond, v))
-                    to_handle.append((Cond._Act._in, ))
+                    idx = len(c._operand) - 1
+                    to_handle.append((Cond._Act._out, None, rec[Cond.i_op], c._op, rec[Cond.i_idx]))
+                    for v in reversed(c._operand):
+                        to_handle.append((Cond._Act._cond, v, rec[Cond.i_op], c._op, idx))
+                        idx -= 1
+                    to_handle.append((Cond._Act._in, None, rec[Cond.i_op], c._op, rec[Cond.i_idx]))
                 else:
-                    ctx = model._handle_cond(c._op, c._operand[0], c._operand[1], depth, ctx)
-            elif rec[0] == Cond._Act._bool:
-                # handle a boolean operator
-                ctx = model._handle_group(rec[1], depth, ctx)
+                    model_ctx = model._handle_cond(c._op, c._operand[0], c._operand[1], model_ctx, rec)
+            else:
+                raise Exception("Unknown Case.")
 
-        ctx = model._finish_cond(ctx)
-        return ctx
+        model_ctx = model._finish_cond(model_ctx)
+        return model_ctx
 
  
 class field(object):
@@ -264,7 +267,6 @@ class ModelBase(object):
     - _enter_group
     - _leave_group
     - _handle_cond
-    - _handle_group
     - _finish_cond
     ========== loop query result
     - _pre_loop
@@ -324,27 +326,23 @@ class ModelBase(object):
         raise NotImplementedError()
 
     @classmethod
-    def _enter_group(klass, depth, ctx):
+    def _enter_group(klass, model_ctx, ctx):
         raise NotImplementedError()
 
     @classmethod
-    def _leave_group(klass, depth, ctx):
+    def _leave_group(klass, model_ctx, ctx):
         raise NotImplementedError()
 
     @classmethod
-    def _handle_group(klass, op, depth, ctx):
-        raise NotImplementedError()
-
-    @classmethod
-    def _handle_cond(klass, op, fld, v2, depth, ctx):
+    def _handle_cond(klass, op, fld, v2, model_ctx, ctx):
         raise NotImplementedError()
 
     @classmethod 
-    def _finish_cond(klass, ctx):
+    def _finish_cond(klass, model_ctx):
         raise NotImplementedError()
 
     @classmethod
-    def _pre_loop(klass, cond_ctx):
+    def _pre_loop(klass, model_ctx):
         raise NotImplementedError()
 
     @classmethod

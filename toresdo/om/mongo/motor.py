@@ -63,41 +63,40 @@ class Model(ModelBase):
         def __init__(self):
             self.q = {}
             self.buf = []
-            self.op = None
 
     @classmethod
     def _prepare_cond_ctx(klass):
         return [Model._Ctx()]
 
     @classmethod
-    def _enter_group(klass, depth, ctx):
-        ctx.append(Model._Ctx())
-        return ctx
+    def _enter_group(klass, model_ctx, ctx):
+        model_ctx.append(Model._Ctx())
+        return model_ctx
 
     @classmethod
-    def _leave_group(klass, depth, ctx):
-        if ctx[-1].op == Cond.and__:
-            if (ctx[-2].op == None or ctx[-2].op == Cond.and__):
+    def _leave_group(klass, model_ctx, ctx):
+        if ctx[Cond.i_op] == Cond.and__:
+            if (ctx[Cond.i_p_op] == None or ctx[Cond.i_p_op] == Cond.and__):
                 """
                 if 'and' case, we just need to insert
                 all condition to parent condition. if current condition
                 is root, just insert it in root.
                 """
-                for v in ctx[-1].buf:
-                    ctx[-2].q.update(v)
+                for v in model_ctx[-1].buf:
+                    model_ctx[-2].q.update(v)
             else:
-                ctx[-1].q.update({"$and": ctx[-1].buf})
-                ctx[-2].buf.append(ctx[-1].q)
+                model_ctx[-1].q.update({"$and": model_ctx[-1].buf})
+                model_ctx[-2].buf.append(model_ctx[-1].q)
 
         else:
-            ctx[-1].q.update({"$or": ctx[-1].buf})
-            ctx[-2].buf.append(ctx[-1].q)
+            model_ctx[-1].q.update({"$or": model_ctx[-1].buf})
+            model_ctx[-2].buf.append(model_ctx[-1].q)
 
-        ctx.pop()
-        return ctx
+        model_ctx.pop()
+        return model_ctx
 
     @classmethod
-    def _handle_cond(klass, op, fld, v2, depth, ctx):
+    def _handle_cond(klass, op, fld, v2, model_ctx, ctx):
         rec = None
         if op == Cond.lt:
             rec = {"$lt" : v2}
@@ -112,24 +111,16 @@ class Model(ModelBase):
         elif op == Cond.ge:
             rec = {"$gte": v2}
 
-        ctx[-1].buf.append({fld._name: rec})
-        return ctx
+        model_ctx[-1].buf.append({fld._name: rec})
+        return model_ctx
 
     @classmethod
-    def _handle_group(klass, op, depth, ctx):
-        if ctx[-1].op != None and ctx[-1].op != op:
-            raise RuntimeError("boolean-op changed in condition-group.")
-
-        ctx[-1].op = op
-        return ctx
-
-    @classmethod
-    def _finish_cond(klass, ctx):
-        if len(ctx[-1].buf) == 1:
-            return ctx[-1].buf[0]
+    def _finish_cond(klass, model_ctx):
+        if len(model_ctx[-1].buf) == 1:
+            return model_ctx[-1].buf[0]
         
-        ctx[-1].q.update({"$and": ctx[-1].buf})
-        return ctx[-1].q
+        model_ctx[-1].q.update({"$and": model_ctx[-1].buf})
+        return model_ctx[-1].q
 
     @classmethod
     def _pre_loop(klass, stmt):
