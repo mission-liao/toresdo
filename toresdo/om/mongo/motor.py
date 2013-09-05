@@ -76,22 +76,10 @@ class Model(ModelBase):
     @classmethod
     def _leave_group(klass, model_ctx, ctx):
         if ctx[Cond.i_op] == Cond.and__:
-            if (ctx[Cond.i_p_op] == None or ctx[Cond.i_p_op] == Cond.and__):
-                """
-                if 'and' case, we just need to insert
-                all condition to parent condition. if current condition
-                is root, just insert it in root.
-                """
-                for v in model_ctx[-1].buf:
-                    model_ctx[-2].q.update(v)
-            else:
-                model_ctx[-1].q.update({"$and": model_ctx[-1].buf})
-                model_ctx[-2].buf.append(model_ctx[-1].q)
-
+            model_ctx[-1].q.update({"$and": model_ctx[-1].buf})
         else:
             model_ctx[-1].q.update({"$or": model_ctx[-1].buf})
-            model_ctx[-2].buf.append(model_ctx[-1].q)
-
+        model_ctx[-2].buf.append(model_ctx[-1].q)
         model_ctx.pop()
         return model_ctx
 

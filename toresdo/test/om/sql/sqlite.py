@@ -54,7 +54,11 @@ class TestDB_sqlite(unittest.TestCase):
         self.assertEqual(stmt[1], ["Tom"])
 
         # combine with several boolean operator
-        stmt = Cond.to_cmd(User, Cond.group(Cond.or__, User.name != "Tom", Cond.group(Cond.and__, User.age > 19, User.relation == 1)))
+        stmt = Cond.to_cmd(User, Cond.group(Cond.or__,
+                                            User.name != "Tom",
+                                            Cond.group(Cond.and__,
+                                                       User.age > 19,
+                                                       User.relation == 1)))
         self.assertEqual(stmt[0], "SELECT * FROM User WHERE (name<>? OR (age>? AND relation=?))")
         self.assertEqual(stmt[1], ["Tom", 19, 1])
 
@@ -62,6 +66,21 @@ class TestDB_sqlite(unittest.TestCase):
         stmt = Cond.to_cmd(User, Cond.group(Cond.or__, User.name == "Tom", User.name == "Mary", User.name == "Gibby"))
         self.assertEqual(stmt[0], "SELECT * FROM User WHERE (name=? OR name=? OR name=?)")
         self.assertEqual(stmt[1], ["Tom", "Mary", "Gibby"])
+        
+        # more complex one, with shuffle group-condition and single-condition
+        stmt = Cond.to_cmd(User,
+                           Cond.group(Cond.and__,
+                                      User.name == "Tom",
+                                      Cond.group(Cond.or__,
+                                                 User.age > 19,
+                                                 User.relation == 1),
+                                      User.name == "Mary",
+                                      Cond.group(Cond.or__,
+                                                 User.name == "Jeff",
+                                                 User.name == "Bezos"),
+                                      User.name == "Qoo"))
+        self.assertEqual(stmt[0], "SELECT * FROM User WHERE (name=? AND (age>? OR relation=?) AND name=? AND (name=? OR name=?) AND name=?)")
+        self.assertEqual(stmt[1], ["Tom", 19, 1, "Mary", "Jeff", "Bezos", "Qoo"])
         
     def test_insert_and_select(self):
         # insert a new user

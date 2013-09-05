@@ -72,7 +72,14 @@ class TestDB_motor(tornado.testing.AsyncTestCase):
         self.assertEqual(ctx, {"name": "Tom"})
 
         # combine with several boolean operator
-        ctx = Cond.to_cmd(User, Cond.group(Cond.or__, User.name != "Tom", User.name == "Mary", Cond.group(Cond.and__, User.age > 19, User.relation == 1, User.age < 5)))
+        ctx = Cond.to_cmd(User,
+                          Cond.group(Cond.or__,
+                                     User.name != "Tom",
+                                     User.name == "Mary",
+                                     Cond.group(Cond.and__,
+                                                User.age > 19,
+                                                User.relation == 1,
+                                                User.age < 5)))
         self.assertEqual(ctx,
                           {"$or": [{"name": {"$ne": "Tom"}},
                                   {"name": "Mary"}, 
@@ -87,3 +94,25 @@ class TestDB_motor(tornado.testing.AsyncTestCase):
                                        {"name": "Mary"},
                                        {"name": "Gibby"},
                                        ]})
+        
+        # more complex one, with shuffle group-condition and single-condition
+        ctx = Cond.to_cmd(User,
+                           Cond.group(Cond.and__,
+                                      User.name == "Tom",
+                                      Cond.group(Cond.or__,
+                                                 User.age > 19,
+                                                 User.relation == 1),
+                                      User.name == "Mary",
+                                      Cond.group(Cond.or__,
+                                                 User.name == "Jeff",
+                                                 User.name == "Bezos"),
+                                      User.name == "Qoo"))
+        self.assertEqual(ctx, {"$and": [{"name": "Tom"},
+                                        {"$or": [{"age": {"$gt": 19}},
+                                                 {"relation": 1}]},
+                                        {"name": "Mary"},
+                                        {"$or": [{"name": "Jeff"},
+                                                 {"name": "Bezos"}
+                                                 ]},
+                                        {"name": "Qoo"}
+                                        ]})
