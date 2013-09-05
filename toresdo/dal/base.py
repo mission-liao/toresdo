@@ -5,7 +5,7 @@ Created on Aug 5, 2013
 '''
 
 from __future__ import absolute_import
-from collections import Iterator
+import collections
 
 class Cond(object):
     """
@@ -214,7 +214,13 @@ class field(object):
         return Cond(Cond.ge, self, self._check_type(None, v))
 
 
-class QSet(Iterator):
+
+class Session(collections.Iterator):
+    """
+    Session
+    
+    used to manage database resource, like connection.
+    """
     def __init__(self, klass, cond=None, cb=None):
         self._klass = klass
         self._cond = cond
@@ -245,7 +251,6 @@ class QSet(Iterator):
         # wrapped raw data with model
         m = self._klass()
         m._attach_model(res)
-
         return m
 
 
@@ -355,10 +360,11 @@ class ModelBase(object):
         raise NotImplementedError() 
 
     """
+    Exported Functions
     """
     @classmethod
     def find(klass, cond=None, cb=None):
-        return QSet(klass, cond, cb)
+        return Session(klass, cond, cb)
 
     @classmethod
     def find_one(klass, cond=None, cb=None):

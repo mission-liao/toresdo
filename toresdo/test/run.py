@@ -8,9 +8,9 @@ Created on Aug 8, 2013
 import unittest
 
 TEST_MODULES = [
-    'toresdo.test.om.basic',
-    'toresdo.test.om.mongo.motor',
-    'toresdo.test.om.sql.sqlite'
+    'toresdo.test.dal.basic',
+    'toresdo.test.dal.mongo.motor',
+    'toresdo.test.dal.sql.sqlite'
 ]
 
 

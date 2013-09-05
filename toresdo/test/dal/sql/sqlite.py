@@ -6,9 +6,9 @@ Created on Sep 2, 2013
 
 import unittest
 import sqlite3
-from toresdo.om.sql.sqlite import Model
-from toresdo.om import field
-from toresdo.om import Cond
+from toresdo.dal.sql.sqlite import Model
+from toresdo.dal import field
+from toresdo.dal import Cond
 
 class User(Model):
     

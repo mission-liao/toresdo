@@ -5,9 +5,9 @@ Created on Aug 15, 2013
 '''
 
 from __future__ import absolute_import
-from toresdo.om import ModelBase
-from toresdo.om import field 
-from toresdo.om import Cond
+from toresdo.dal import ModelBase
+from toresdo.dal import field 
+from toresdo.dal import Cond
 from bson import ObjectId
 
 
@@ -17,7 +17,7 @@ class Model(ModelBase):
     based on pymongo
     """
 
-    def _prepare_obj(self):        
+    def _prepare_obj(self):
         self._local_model = self.__class__._model.copy()
 
     @classmethod 
@@ -51,9 +51,6 @@ class Model(ModelBase):
             return self._local_model[name]
         # this means this field is not set and no default value
         return None
-
-    def save(self, callback=None):
-        self.__class__._db_coll.insert(self._local_model, callback=callback)
 
     class _Ctx(object):
         """
@@ -121,3 +118,9 @@ class Model(ModelBase):
     @classmethod
     def _post_loop(klass, ctx):
         pass
+
+    """
+    Exported Functions
+    """
+    def save(self, callback=None):
+        self.__class__._db_coll.insert(self._local_model, callback=callback)

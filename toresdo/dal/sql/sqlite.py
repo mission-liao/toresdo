@@ -8,8 +8,8 @@ Created on Aug 29, 2013
 from __future__ import absolute_import
 
 import sqlite3
-from toresdo.om import ModelBase
-from toresdo.om import Cond
+from toresdo.dal import ModelBase
+from toresdo.dal import Cond
 
 
 class Model(ModelBase):
@@ -99,12 +99,6 @@ class Model(ModelBase):
     def _get_field(self, name):
         return self._local_val[self.__class__._field_idx[name]]
 
-    def save(self, callback=None):
-        conn = sqlite3.connect(self.__class__.__table_name__)
-        with conn:
-            conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
-        conn.close()
-
     @classmethod
     def _prepare_cond_ctx(klass):
         return ["", []]
@@ -174,3 +168,12 @@ class Model(ModelBase):
     @classmethod
     def _post_loop(klass, ctx):
         ctx[0].close()
+
+    """
+    Exported Functions
+    """
+    def save(self, callback=None):
+        conn = sqlite3.connect(self.__class__.__table_name__)
+        with conn:
+            conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
+        conn.close()

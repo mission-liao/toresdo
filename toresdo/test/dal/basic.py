@@ -5,8 +5,8 @@ Created on Aug 8, 2013
 '''
 
 import unittest
-from toresdo.om import ModelBase
-from toresdo.om import field
+from toresdo.dal import ModelBase
+from toresdo.dal import field
 
 class TestModel(ModelBase):
     

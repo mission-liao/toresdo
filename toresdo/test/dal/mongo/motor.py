@@ -6,9 +6,9 @@ Created on Aug 19, 2013
 
 import motor
 import tornado.testing
-from toresdo.om.mongo.motor import Model
-from toresdo.om import field
-from toresdo.om import Cond
+from toresdo.dal.mongo.motor import Model
+from toresdo.dal import field
+from toresdo.dal import Cond
 
 class User(Model):
     
@@ -44,6 +44,14 @@ class TestDB_motor(tornado.testing.AsyncTestCase):
         global IOLoop among test-cases of motor
         """
         return tornado.ioloop.IOLoop.instance()
+
+    @classmethod
+    def setUpClass(klass):
+        pass
+    
+    @classmethod
+    def tearDownClass(klass):
+        pass
     
     def test_with_id(self):
         """
