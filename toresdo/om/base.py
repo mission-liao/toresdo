@@ -290,8 +290,9 @@ class ModelBase(object):
 
         self._prepare_obj()
 
+        # initialize field with kwargs
         for k, v in kwargs.items():
-            if hasattr(self, k):
+            if hasattr(self.__class__, k) and type(getattr(self.__class__, k)) is field:
                 setattr(self, k, v)
                 
     """
