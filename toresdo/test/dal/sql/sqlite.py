@@ -32,13 +32,8 @@ class User(Model):
         return str
 
 class TestDB_sqlite(unittest.TestCase):
-    @classmethod
-    def setUpClass(klass):
-        pass
-
-    @classmethod
-    def tearDownClass(klass):
-        pass
+    def tearDown(self):
+        Model.release()
 
     def test_where_clause(self):
         # A very basic one
@@ -92,6 +87,13 @@ class TestDB_sqlite(unittest.TestCase):
         self.assertEqual(uu.relation, 1)
 
     def test_select_more_than_one(self):
+        u = User()
+        u.name = "Tom"
+        u.email = "tom@hotmail.com"
+        u.age = 19
+        u.relation = 1
+        u.save()
+
         u = User()
         u.name = "Mary"
         u.age = 19

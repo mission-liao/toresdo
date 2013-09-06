@@ -254,7 +254,7 @@ class ConnPool(object):
 
         # we didn't have a stand-by connection, allocate a new one.
         if len(self._buf) < self._max_sz:
-            self._buf.append((self._producer._new_conn(self._ctx), ConnPool._busy))
+            self._buf.append([self._producer._new_conn(self._ctx), ConnPool._busy])
             return len(self._buf) - 1
 
         # maximun allowed connection is reached.
@@ -397,6 +397,51 @@ class AdapterBase(object):
     _ _new_conn_pool_ctx
     - _del_conn_pool_ctx
     """
+    
+    """
+    Optional Callbacks
+    """
+    def _init_obj(self): pass
+    @classmethod
+    def _cmp_conn(klass, conn1, conn2): pass
+    @classmethod
+    def _new_conn(klass, ctx): pass
+    @classmethod
+    def _del_conn(klass, ctx, conn): pass
+    @classmethod
+    def _new_conn_pool_ctx(klass, conn_config): pass
+    @classmethod
+    def _del_conn_pool_ctx(klass, ctx): pass
+ 
+
+    """
+    Required Callbacks
+    """
+    @classmethod
+    def _is_cls_inited(klass): raise NotImplementedError()
+    @classmethod
+    def _init_cls(klass, fields): raise NotImplementedError()
+    @classmethod
+    def _uninit_cls(klass): raise NotImplementedError()
+    def _attach_model(self, model): raise NotImplementedError()
+    def _set_field(self, name, v): raise NotImplementedError()
+    def _get_field(self, name): raise NotImplementedError()
+    @classmethod
+    def _init_cond_ctx(klass): raise NotImplementedError()
+    @classmethod
+    def _enter_group(klass, model_ctx, ctx): raise NotImplementedError()
+    @classmethod
+    def _leave_group(klass, model_ctx, ctx): raise NotImplementedError()
+    @classmethod
+    def _handle_cond(klass, op, fld, v2, model_ctx, ctx): raise NotImplementedError()
+    @classmethod 
+    def _finish_cond(klass, model_ctx): raise NotImplementedError()
+    @classmethod
+    def _pre_loop(klass, model_ctx): raise NotImplementedError()
+    @classmethod
+    def _next_elm(klass, loop_ctx): raise NotImplementedError()
+    @classmethod
+    def _post_loop(klass, loop_ctx): raise NotImplementedError() 
 
     """
     Class Type of connection-pool,
@@ -480,50 +525,6 @@ class AdapterBase(object):
             if hasattr(self.__class__, k) and type(getattr(self.__class__, k)) is field:
                 setattr(self, k, v)
                 
-    """
-    Optional Callbacks
-    """
-    def _init_obj(self): pass
-    @classmethod
-    def _cmp_conn(klass, conn1, conn2): pass
-    @classmethod
-    def _new_conn(klass, ctx): pass
-    @classmethod
-    def _del_conn(klass, ctx, conn): pass
-    @classmethod
-    def _new_conn_pool_ctx(klass, conn_config): pass
-    @classmethod
-    def _del_conn_pool_ctx(klass, ctx): pass
- 
-
-    """
-    Required Callbacks
-    """
-    @classmethod
-    def _is_cls_inited(klass): raise NotImplementedError()
-    @classmethod
-    def _init_cls(klass, fields): raise NotImplementedError()
-    @classmethod
-    def _uninit_cls(klass): raise NotImplementedError()
-    def _attach_model(self, model): raise NotImplementedError()
-    def _set_field(self, name, v): raise NotImplementedError()
-    def _get_field(self, name): raise NotImplementedError()
-    @classmethod
-    def _init_cond_ctx(klass): raise NotImplementedError()
-    @classmethod
-    def _enter_group(klass, model_ctx, ctx): raise NotImplementedError()
-    @classmethod
-    def _leave_group(klass, model_ctx, ctx): raise NotImplementedError()
-    @classmethod
-    def _handle_cond(klass, op, fld, v2, model_ctx, ctx): raise NotImplementedError()
-    @classmethod 
-    def _finish_cond(klass, model_ctx): raise NotImplementedError()
-    @classmethod
-    def _pre_loop(klass, model_ctx): raise NotImplementedError()
-    @classmethod
-    def _next_elm(klass, loop_ctx): raise NotImplementedError()
-    @classmethod
-    def _post_loop(klass, loop_ctx): raise NotImplementedError() 
 
     """
     Exported Functions

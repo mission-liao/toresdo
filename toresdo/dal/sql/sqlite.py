@@ -14,8 +14,8 @@ from toresdo.dal import Cond
 
 class Model(AdapterBase):
     """
-    Model for Sqlite
-    
+    Adapter for Sqlite
+
     Internally, real data is stored in a list, which is useful
     when the 'WHERE' clause is used in qmark way.
        
@@ -24,10 +24,8 @@ class Model(AdapterBase):
     We need to pass values as a iterable(list, tuple), and that's
     how we store the data.
         
-    This Sqlite model is just implemented for testing, that's why
-    we always connect to 'test.db' and didn't provide a way to connect
-    anywhere else.
- 
+    This sqlite adapter is just implemented for testing, that's why
+    we connect to ':memory:' by default.
     """
 
     __toresdo_db_conn__ = ":memory:"
@@ -75,10 +73,19 @@ class Model(AdapterBase):
         klass._sql_cmd["insert"] = cmd
 
         # create table if not exist
-        conn = sqlite3.connect(klass.__table_name__)
-        with conn:
-            conn.execute(klass._sql_cmd["create_table"])
-        conn.close()
+        idx = klass.__conn_pool__.req()
+        if idx != None:
+            conn = klass.__conn_pool__[idx]
+            with conn:
+                conn.execute(klass._sql_cmd["create_table"])
+            klass.__conn_pool__.dispose(idx)
+            
+    @classmethod
+    def _uninit_cls(klass):
+        if hasattr(klass, "_field_idx"):
+            del klass._field_idx
+        if hasattr(klass, "_field_default"):
+            del klass._field_default
 
     @classmethod
     def _is_cls_inited(klass):
@@ -155,11 +162,14 @@ class Model(AdapterBase):
     
     @classmethod
     def _pre_loop(klass, stmt):
-        conn = sqlite3.connect(klass.__table_name__)
-        curs = conn.cursor()
-        curs.execute(stmt[0], stmt[1])
+        idx = klass.__conn_pool__.req()
+        if idx != None:
+            curs = klass.__conn_pool__[idx].cursor()
+            curs.execute(stmt[0], stmt[1])
+        else:
+            raise Exception("No db connection available.")
 
-        return [conn, curs]
+        return [idx, curs]
     
     @classmethod
     def _next_elm(klass, ctx):
@@ -167,17 +177,45 @@ class Model(AdapterBase):
     
     @classmethod
     def _post_loop(klass, ctx):
-        ctx[0].close()
+        klass.__conn_pool__.dispose(ctx[0])
+
+    @classmethod        
+    def _cmp_conn(klass, conn1, conn2):
+        return 0 if conn1 == conn2 else 1
+
+    _conn_4_memory = None
+
+    @classmethod
+    def _new_conn(klass, ctx):
+        if ctx == ":memory:":
+            if klass._conn_4_memory == None:
+                klass._conn_4_memory = sqlite3.connect(ctx)
+            
+        return sqlite3.connect(ctx)
+
+    @classmethod
+    def _del_conn(klass, ctx, conn):
+        if conn != klass._conn_4_memory:
+            conn.close()
+ 
+    @classmethod
+    def _new_conn_pool_ctx(klass, conn_config):
+        return conn_config
+
+    @classmethod
+    def _del_conn_pool_ctx(klass, ctx):
+        if ctx == ":memory:":
+            klass._conn_4_memory.close()
+            klass._conn_4_memory = None
 
     """
     Exported Functions
     """
     def save(self, callback=None):
-        conn = sqlite3.connect(self.__class__.__table_name__)
-        with conn:
-            conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
-        conn.close()
+        idx = self.__conn_pool__.req()
+        if idx != None:
+            conn = self.__conn_pool__[idx]
+            with conn:
+                conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
+            self.__conn_pool__.dispose(idx)
 
-
-# Trigger connection-pool initialization
-Model()
