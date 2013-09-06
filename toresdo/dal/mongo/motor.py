@@ -126,7 +126,3 @@ class Model(AdapterBase):
     """
     def save(self, callback=None):
         self.__class__._db_coll.insert(self._local_model, callback=callback)
-
-       
-# Trigger connection-pool initialization
-Model()

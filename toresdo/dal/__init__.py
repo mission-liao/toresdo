@@ -468,23 +468,13 @@ class AdapterBase(object):
             """
             if (not hasattr(self.__class__, "__toresdo_db_conn_table__") or
                 self.__class__.__toresdo_db_conn_table__ == None):
-                """
-                loop MRO to find the base-class that direct inheriting
-                'AdapterBase'. Once found, assign a table to it, that table is
-                a list of {'connection-string, connection-pool}.
-                """
-                is_base_found = False
-                for cls in reversed(inspect.getmro(self.__class__)):
-                    if cls is AdapterBase:
-                        is_base_found = True
-                        continue
+                for cls in AdapterBase.__subclasses__():
+                    if issubclass(self.__class__, cls):
+                        setattr(cls, "__toresdo_db_conn_table__", [])
+                        break
 
-                    if is_base_found:
-                        if issubclass(cls, AdapterBase):
-                            cls.__toresdo_db_conn_table__ = []
-                            break
-                            
-                if not hasattr(self.__class__, "__toresdo_db_conn_table__"):
+                if (not hasattr(self.__class__, "__toresdo_db_conn_table__") or
+                    self.__class__.__toresdo_db_conn_table__ == None):
                     raise Exception("Unable to create the table of connection-pools for this model {0}.".format(self.__class__.__name__))
 
             self.__class__.__conn_pool__ = None
@@ -562,5 +552,4 @@ class AdapterBase(object):
 
             if hasattr(cls, "__toresdo_db_conn_table__") and cls.__toresdo_db_conn_table__ != None:
                 cls.__toresdo_db_conn_table__.clear()
-                cls.__toresdo_db_conn_table__ = None
     
