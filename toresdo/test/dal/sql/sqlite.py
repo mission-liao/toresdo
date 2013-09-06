@@ -5,7 +5,6 @@ Created on Sep 2, 2013
 '''
 
 import unittest
-import sqlite3
 from toresdo.dal.sql.sqlite import Model
 from toresdo.dal import field
 from toresdo.dal import Cond
@@ -35,17 +34,11 @@ class User(Model):
 class TestDB_sqlite(unittest.TestCase):
     @classmethod
     def setUpClass(klass):
-        conn = sqlite3.connect(Model.__table_name__)
-        with conn:
-            conn.execute("DROP TABLE IF EXISTS User")
-        conn.close()
+        pass
 
     @classmethod
     def tearDownClass(klass):
-        conn = sqlite3.connect(Model.__table_name__)
-        with conn:
-            conn.execute("DROP TABLE IF EXISTS User")
-        conn.close()
+        pass
 
     def test_where_clause(self):
         # A very basic one

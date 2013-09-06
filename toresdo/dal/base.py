@@ -6,6 +6,9 @@ Created on Aug 5, 2013
 
 from __future__ import absolute_import
 import collections
+import abc
+import inspect
+
 
 class Cond(object):
     """
@@ -82,7 +85,7 @@ class Cond(object):
         convert a condition to a command that
         can be used in querying database
         """
-        model_ctx = model._prepare_cond_ctx()
+        model_ctx = model._init_cond_ctx()
         to_handle = [(Cond._Act._cond, cond, None, None, 0)]
         """
         traverse condition-tree, and
@@ -214,6 +217,116 @@ class field(object):
         return Cond(Cond.ge, self, self._check_type(None, v))
 
 
+class ConnPool(object):
+    """
+    Base implementation of Connection Pool
+    """
+
+    """
+    It's old-style to initialize meta-class.
+    In 3.3, correct way for metaclass should be
+        class A(metaclass=abc.ABCMeta):
+            ...
+            
+    However, Eclipse would complain about this.
+    """
+    __metaclass__ = abc.ABCMeta
+    
+    # status of connection objects
+    _busy = 0
+    _aval = 1   # stands for 'available'
+    
+    _idx_conn = 0
+    _idx_status = 1
+
+    def __init__(self, klass, max_size=5):
+        self._buf = []
+        self._max_sz = max_size
+        self._producer = klass
+        self._ctx = self._producer._new_conn_pool_ctx(self._producer.__toresdo_db_conn__)
+        
+    def _find_one(self):
+        r = [n for n in enumerate(self._buf) if n[1][ConnPool._idx_status] == ConnPool._aval]
+        # we have one available connection
+        if len(r):
+            self._buf[r[0][0]][ConnPool._idx_status] = ConnPool._busy
+            return r[0][0]
+
+        # we didn't have a stand-by connection, allocate a new one.
+        if len(self._buf) < self._max_sz:
+            self._buf.append((self._producer._new_conn(self._ctx), ConnPool._busy))
+            return len(self._buf) - 1
+
+        # maximun allowed connection is reached.
+        raise OverflowError("All connection is busy and max-conn is reached.")
+
+    def _give_back(self, key):
+        if self._buf[key][ConnPool._idx_status] == ConnPool._aval:
+            raise RuntimeError("Give back an available connection, maybe you release it twice.")
+        
+        self._buf[key][ConnPool._idx_status] = ConnPool._aval
+
+    def _close(self):
+        for v in self._buf:
+            # TODO: what if the connection status is busy.
+            self._producer._del_conn(self._ctx, v[0])
+            
+        self._buf.clear()
+        self._producer._del_conn_pool_ctx(self._ctx)
+        self._ctx = None
+
+    def __getitem__(self, key):
+        return self._buf[key][ConnPool._idx_conn]
+    
+    def __setitem__(self, key):
+        """
+        Avoid to modify any existing slot for connection-objects
+        """
+        raise Exception("Never modify connection-pool.")
+    
+    def __delitem__(self, key):
+        """
+        Avoid to modify any existing slot for connection-objects
+        """
+        raise Exception("Never modify connection-pool.")
+
+
+    """
+    in a multi-threaded project, you will need to implement
+    locking mechanism in the two function below. Now the basic
+    implement is no concurrent access-control and should be
+    ok for tornado.
+    """
+    @abc.abstractmethod
+    def req(self):
+        raise NotImplementedError()
+
+    @abc.abstractmethod    
+    def dispose(self, key):
+        raise NotImplementedError()
+    
+    @abc.abstractmethod
+    def close_all(self):
+        """
+        This function should be called before the whole program
+        is about to close.
+        """
+        raise NotImplementedError()
+
+
+class DefaultConnPool(ConnPool):
+    """
+    Default implementation of ConnPool
+    """
+    def req(self):
+        return self._find_one()
+
+    def dispose(self, key):
+        return self._give_back(key)
+    
+    def close_all(self):
+        self._close()
+
 
 class Session(collections.Iterator):
     """
@@ -254,21 +367,21 @@ class Session(collections.Iterator):
         return m
 
 
-class ModelBase(object):
+class AdapterBase(object):
     """
-    Base of Model.
-    
+    Base of Adaptor.
+
     Each model should provide these callbacks listed below:
     ========== init model base field
-    - _is_cls_prepared
-    - _prepare_cls
-    - _prepare_obj
+    - _is_cls_inited
+    - _init_cls
+    - _init_obj
     - _attach_model
     ========== field access
     - _set_field
     - _get_field
     ========== compose query-statement
-    - _prepare_cond_ctx
+    - _init_cond_ctx
     - _enter_group
     - _leave_group
     - _handle_cond
@@ -277,9 +390,75 @@ class ModelBase(object):
     - _pre_loop
     - _next_elm
     - _post_loop
+    ========== connection pool management
+    - _cmp_conn
+    _ _new_conn
+    - _del_conn
+    _ _new_conn_pool_ctx
+    - _del_conn_pool_ctx
     """
+
+    """
+    Class Type of connection-pool,
+    override this attribute to use your own
+    connection pool
+    """
+    __conn_pool_cls__ = DefaultConnPool
+
     def __init__(self, **kwargs):
-        if not self.__class__._is_cls_prepared():
+        if self.__class__.__name__ == "AdapterBase":
+            raise Exception("Do not initialize AdapterBase.")
+        
+        if not issubclass(self.__class__.__conn_pool_cls__, ConnPool):
+            raise Exception("Unknown type of connection-pool class.")
+
+        if not self.__class__._is_cls_inited():
+            """
+            Preparation for connection pool
+            
+            We will look for any existing pool through mro,
+            and make sure the connection with same address
+            is not initialized yet. Once not initialized yet,
+            we will allocate one.
+            """
+            if (not hasattr(self.__class__, "__toresdo_db_conn_table__") or
+                self.__class__.__toresdo_db_conn_table__ == None):
+                """
+                loop MRO to find the base-class that direct inheriting
+                'AdapterBase'. Once found, assign a table to it, that table is
+                a list of {'connection-string, connection-pool}.
+                """
+                is_base_found = False
+                for cls in reversed(inspect.getmro(self.__class__)):
+                    if cls is AdapterBase:
+                        is_base_found = True
+                        continue
+
+                    if is_base_found:
+                        if issubclass(cls, AdapterBase):
+                            cls.__toresdo_db_conn_table__ = []
+                            break
+                            
+                if not hasattr(self.__class__, "__toresdo_db_conn_table__"):
+                    raise Exception("Unable to create the table of connection-pools for this model {0}.".format(self.__class__.__name__))
+
+            self.__class__.__conn_pool__ = None
+            # check if connection-pool with identical config is already initialized.
+            for v in self.__toresdo_db_conn_table__:
+                if self.__class__._cmp_conn(self.__class__.__toresdo_db_conn__, v[0]) == 0:
+                    self.__class__.__conn_pool__ = v[1]
+                    break
+                        
+            if self.__class__.__conn_pool__ == None:
+                # create a new pool based on callback
+                self.__class__.__conn_pool__ = self.__class__.__conn_pool_cls__(self.__class__)
+
+                # register this new pool
+                self.__toresdo_db_conn_table__.append((self.__class__.__toresdo_db_conn__, self.__class__.__conn_pool__))
+
+                if self.__class__.__conn_pool__ == None:
+                    raise Exception("Unable to create connection pool for this model {0}".format(self.__class__.__name__))
+
             # generate a dict of field
             fields = {}
             for k,v in self.__class__.__dict__.items():
@@ -287,15 +466,16 @@ class ModelBase(object):
                     fields.update({k: v})
 
             # pass field list to model-implementation
-            self.__class__._prepare_cls(fields)
+            self.__class__._init_cls(fields)
 
-            if not self.__class__._is_cls_prepared():
+            if not self.__class__._is_cls_inited():
                 # Error check, make sure model is correctly initialized
                 raise Exception("Not initialized.")
 
-        self._prepare_obj()
+        # preparation for each instance
+        self._init_obj()
 
-        # initialize field with kwargs
+        # initialize field with keyword-arguments
         for k, v in kwargs.items():
             if hasattr(self.__class__, k) and type(getattr(self.__class__, k)) is field:
                 setattr(self, k, v)
@@ -303,61 +483,47 @@ class ModelBase(object):
     """
     Optional Callbacks
     """
-    def _prepare_obj(self):
-        pass
+    def _init_obj(self): pass
+    @classmethod
+    def _cmp_conn(klass, conn1, conn2): pass
+    @classmethod
+    def _new_conn(klass, ctx): pass
+    @classmethod
+    def _del_conn(klass, ctx, conn): pass
+    @classmethod
+    def _new_conn_pool_ctx(klass, conn_config): pass
+    @classmethod
+    def _del_conn_pool_ctx(klass, ctx): pass
+ 
 
-    
     """
     Required Callbacks
     """
     @classmethod
-    def _is_cls_prepared(klass):
-        raise NotImplementedError()
-
+    def _is_cls_inited(klass): raise NotImplementedError()
     @classmethod
-    def _prepare_cls(klass, fields):
-        raise NotImplementedError()
-
-    def _attach_model(self, model):
-        raise NotImplementedError()
-
-    def _set_field(self, name, v):
-        raise NotImplementedError()
-
-    def _get_field(self, name):
-        raise NotImplementedError()
-
+    def _init_cls(klass, fields): raise NotImplementedError()
     @classmethod
-    def _prepare_cond_ctx(klass):
-        raise NotImplementedError()
-
+    def _uninit_cls(klass): raise NotImplementedError()
+    def _attach_model(self, model): raise NotImplementedError()
+    def _set_field(self, name, v): raise NotImplementedError()
+    def _get_field(self, name): raise NotImplementedError()
     @classmethod
-    def _enter_group(klass, model_ctx, ctx):
-        raise NotImplementedError()
-
+    def _init_cond_ctx(klass): raise NotImplementedError()
     @classmethod
-    def _leave_group(klass, model_ctx, ctx):
-        raise NotImplementedError()
-
+    def _enter_group(klass, model_ctx, ctx): raise NotImplementedError()
     @classmethod
-    def _handle_cond(klass, op, fld, v2, model_ctx, ctx):
-        raise NotImplementedError()
-
+    def _leave_group(klass, model_ctx, ctx): raise NotImplementedError()
+    @classmethod
+    def _handle_cond(klass, op, fld, v2, model_ctx, ctx): raise NotImplementedError()
     @classmethod 
-    def _finish_cond(klass, model_ctx):
-        raise NotImplementedError()
-
+    def _finish_cond(klass, model_ctx): raise NotImplementedError()
     @classmethod
-    def _pre_loop(klass, model_ctx):
-        raise NotImplementedError()
-
+    def _pre_loop(klass, model_ctx): raise NotImplementedError()
     @classmethod
-    def _next_elm(klass, loop_ctx):
-        raise NotImplementedError()
-
+    def _next_elm(klass, loop_ctx): raise NotImplementedError()
     @classmethod
-    def _post_loop(klass, loop_ctx):
-        raise NotImplementedError() 
+    def _post_loop(klass, loop_ctx): raise NotImplementedError() 
 
     """
     Exported Functions
@@ -369,3 +535,31 @@ class ModelBase(object):
     @classmethod
     def find_one(klass, cond=None, cb=None):
         return next(klass.find(cond, cb))
+
+    @classmethod
+    def release(klass):
+        # find all related classes
+        def get_related_classes(cls):
+            sub = [cls]
+            to_trace = [cls]
+            while len(to_trace) > 0:
+                c = to_trace.pop()
+
+                local_sub = c.__subclasses__()
+                sub.extend(local_sub)
+                to_trace.extend(local_sub)
+                
+            return list(set(sub))
+        
+        # call _uninit_cls on each class
+        for cls in reversed(get_related_classes(klass)):
+            cls._uninit_cls()
+            # release connection-pool
+            if hasattr(cls, "__conn_pool__") and cls.__conn_pool__ != None:
+                cls.__conn_pool__.close_all()
+                cls.__conn_pool__ = None
+
+            if hasattr(cls, "__toresdo_db_conn_table__") and cls.__toresdo_db_conn_table__ != None:
+                cls.__toresdo_db_conn_table__.clear()
+                cls.__toresdo_db_conn_table__ = None
+    

@@ -8,11 +8,11 @@ Created on Aug 29, 2013
 from __future__ import absolute_import
 
 import sqlite3
-from toresdo.dal import ModelBase
+from toresdo.dal import AdapterBase
 from toresdo.dal import Cond
 
 
-class Model(ModelBase):
+class Model(AdapterBase):
     """
     Model for Sqlite
     
@@ -29,14 +29,14 @@ class Model(ModelBase):
     anywhere else.
  
     """
-    
-    __table_name__ = "test.db"
 
-    def _prepare_obj(self):
+    __toresdo_db_conn__ = ":memory:"
+
+    def _init_obj(self):
         self._local_val = list(self.__class__._field_default)
 
     @classmethod
-    def _prepare_cls(klass, fields):
+    def _init_cls(klass, fields):
         # init all required variables
         klass._sql_cmd = {}
         klass._field_idx = {}
@@ -81,7 +81,7 @@ class Model(ModelBase):
         conn.close()
 
     @classmethod
-    def _is_cls_prepared(klass):
+    def _is_cls_inited(klass):
         has_idx = hasattr(klass, "_field_idx")
         has_default = hasattr(klass, "_field_default")
         if has_idx and has_default:
@@ -100,7 +100,7 @@ class Model(ModelBase):
         return self._local_val[self.__class__._field_idx[name]]
 
     @classmethod
-    def _prepare_cond_ctx(klass):
+    def _init_cond_ctx(klass):
         return ["", []]
     
     @staticmethod 
@@ -177,3 +177,7 @@ class Model(ModelBase):
         with conn:
             conn.execute(self.__class__._sql_cmd["insert"], self._local_val)
         conn.close()
+
+
+# Trigger connection-pool initialization
+Model()

@@ -5,23 +5,25 @@ Created on Aug 15, 2013
 '''
 
 from __future__ import absolute_import
-from toresdo.dal import ModelBase
+from toresdo.dal import AdapterBase
 from toresdo.dal import field 
 from toresdo.dal import Cond
 from bson import ObjectId
 
 
-class Model(ModelBase):
+class Model(AdapterBase):
     """
     Model for Motor, a tornado mongodb driver,
     based on pymongo
     """
 
-    def _prepare_obj(self):
+    __toresdo_db_conn__ = "localhost", 27017
+
+    def _init_obj(self):
         self._local_model = self.__class__._model.copy()
 
     @classmethod 
-    def _prepare_cls(klass, fields):
+    def _init_cls(klass, fields):
         klass._model = {}
         for k, v in fields.items():
             klass._model.update({k: v._default})
@@ -40,7 +42,7 @@ class Model(ModelBase):
         setattr(klass, "_id", f_id)
 
     @classmethod
-    def _is_cls_prepared(klass):
+    def _is_cls_inited(klass):
         return hasattr(klass, "_model") and klass._model != None
 
     def _set_field(self, name, v):
@@ -62,7 +64,7 @@ class Model(ModelBase):
             self.buf = []
 
     @classmethod
-    def _prepare_cond_ctx(klass):
+    def _init_cond_ctx(klass):
         return [Model._Ctx()]
 
     @classmethod
@@ -124,3 +126,7 @@ class Model(ModelBase):
     """
     def save(self, callback=None):
         self.__class__._db_coll.insert(self._local_model, callback=callback)
+
+       
+# Trigger connection-pool initialization
+Model()
